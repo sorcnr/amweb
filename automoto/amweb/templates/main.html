@@ -1,0 +1,132 @@
+<!DOCTYPE html>{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="Description" content="Enter your description here"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    <link href='https://unpkg.com/boxicons@2.1.2/css/boxicons.min.css' rel='stylesheet'>
+
+    <link href="https://cdn.amplify.aws/packages/maplibre-gl/1.15.2/maplibre-gl.css" rel="stylesheet" integrity="sha384-DrPVD9GufrxGb7kWwRv0CywpXTmfvbKOZ5i5pN7urmIThew0zXKTME+gutUgtpeD" crossorigin="anonymous" referrerpolicy="no-referrer"></link>
+    <script src="https://cdn.amplify.aws/packages/maplibre-gl/1.15.2/maplibre-gl.js" integrity="sha384-rwYfkmAOpciZS2bDuwZ/Xa/Gog6jXem8D/whm3wnsZSVFemDDlprcUXHnDDUcrNU" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.amplify.aws/packages/core/4.3.0/aws-amplify-core.min.js" integrity="sha384-7Oh+5w0l7XGyYvSqbKi2Q7SA5K640V5nyW2/LEbevDQEV1HMJqJLA1A00z2hu8fJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.amplify.aws/packages/auth/4.3.8/aws-amplify-auth.min.js" integrity="sha384-jfkXCEfYyVmDXYKlgWNwv54xRaZgk14m7sjeb2jLVBtUXCD2p+WU8YZ2mPZ9Xbdw" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.amplify.aws/packages/geo/1.1.0/aws-amplify-geo.min.js" integrity="sha384-TFMTyWuCbiptXTzvOgzJbV8TPUupG1rA1AVrznAhCSpXTIdGw82bGd8RTk5rr3nP" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.amplify.aws/packages/maplibre-gl-js-amplify/1.1.0/maplibre-gl-js-amplify.umd.min.js" integrity="sha384-7/RxWonKW1nM9zCKiwU9x6bkQTjldosg0D1vZYm0Zj+K/vUSnA3sOMhlRRWAtHPi" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+      
+      #map { height: 100vh; z-index:-1; }
+    </style>
+
+<title>Title</title>
+</head>
+<body> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.9.2/umd/popper.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.0/js/bootstrap.min.js"></script>
+    
+    <nav class="mobile-nav">
+        <a href="#map" class="bloc-icon">
+            <i class='bx bxs-map-pin bx-lg'></i>
+        </a>
+        <a href="#devices" class="bloc-icon">
+            <i class='bx bx-devices bx-lg'></i>
+        </a>
+        <a href="#alarm" class="bloc-icon">
+            <i class='bx bx-alarm-exclamation bx-lg'></i>
+        </a>
+        <a href="#engine" class="bloc-icon">
+           <i class='bx bx-bolt-circle bx-lg'></i>
+        </a>
+        <a href="#settings" class="bloc-icon">
+            <i class='bx bx-category-alt bx-lg'></i>
+        </a>
+    </nav>
+
+    
+    <div id="map" />
+    <script type="module">
+      const { Amplify } = aws_amplify_core;
+      const { createMap } = AmplifyMapLibre;
+
+      Amplify.configure({
+        Auth: {
+          identityPoolId: "eu-central-1:35b9b1f2-a10f-4fe4-860f-fee7efd0c421",
+          region: "eu-central-1",
+        },
+        geo: {
+          AmazonLocationService: {
+            maps: {
+              items: {
+                "automoto.map": {
+                  style: "Default style"
+                },
+              },
+              default: "automoto.map",
+            },
+            region: "eu-central-1",
+          },
+        }
+      });
+
+      async function initializeMap() {
+        const map = await createMap(
+          {
+            container: "map",
+            zoom:12,
+            hash: true,
+          }
+        );
+
+        map.addControl(new maplibregl.NavigationControl(), "top-left");
+
+        var url = 'http://localhost:8000/json/';
+        map.on('load', function () {
+        var request = new XMLHttpRequest();
+        window.setInterval(function () {
+        // make a GET request to parse the GeoJSON at the url
+        request.open('GET', url, true);
+        request.onload = function () {
+        if (this.status >= 200 && this.status < 400) {
+        // retrieve the JSON from the response
+        var json = JSON.parse(this.response);
+        
+        // update the drone symbol's location on the map
+        map.getSource('drone').setData(json);
+        
+        // fly the map to the drone's current location
+        map.flyTo({
+        center: json.coordinates,
+        speed: 0.5
+        });
+        }
+        };
+        request.send();
+        }, 2000);
+        map.loadImage('https://maplibre.org/maplibre-gl-js-docs/assets/osgeo-logo.png', function(error, image) {
+        if (error) throw error;
+        if (!map.hasImage('location')) map.addImage('location', image);
+        });
+        map.addSource('drone', { type: 'geojson', data: url });
+        map.addLayer({
+        'id': 'drone',
+        'type': 'symbol',
+        'source': 'drone',
+        'layout': {
+            'icon-image': 'location',
+            
+            
+            
+            }
+
+        });
+        });
+        
+      }
+
+      initializeMap();
+    </script>
+</body>
+</html>
